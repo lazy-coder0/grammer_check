@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WriteRight – AI Writing Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="CSS/style.css">
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">Write<span>Right</span></div>
+  <div class="nav-btns" id="nav-btns">
+    <button class="btn-ghost" onclick="showPage('login')">Log In</button>
+    <button class="btn-primary" onclick="showPage('register')">Sign Up</button>
+  </div>
+  <div class="nav-btns" id="nav-user" style="display:none">
+    <button class="btn-ghost" onclick="showPage('checker')">✍️ Check Writing</button>
+    <button class="btn-ghost" onclick="showPage('profile')">👤 Profile</button>
+    <button class="btn-primary" onclick="logout()">Log Out</button>
+  </div>
+</nav>
+
+<!-- HOME -->
+<div id="page-home" class="page active">
+  <div class="hero">
+    <div class="hero-tag"><span></span> AI-Powered Writing Assistant</div>
+    <h1>Write Clearly.<br><em>Every Time.</em></h1>
+    <p>Paste your text and let AI suggest corrections, improvements, and better phrasing — instantly.</p>
+    <div class="hero-cta">
+      <button class="btn-big btn-big-primary" onclick="showPage('register')">Get Started — Free</button>
+      <button class="btn-big btn-big-outline" onclick="showPage('login')">I Have an Account</button>
+    </div>
+  </div>
+  <div class="features">
+    <div class="feat-card">
+      <div class="feat-icon">🔍</div>
+      <h3>Grammar Check</h3>
+      <p>Catch every grammatical error, typo, and awkward phrasing before it reaches your reader.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">✨</div>
+      <h3>Style Improve</h3>
+      <p>Get suggestions to make your writing more engaging, concise, and impactful.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🔄</div>
+      <h3>Rephrase Lines</h3>
+      <p>Rewrite entire sentences or paragraphs for clarity, tone, or word choice.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📋</div>
+      <h3>History Saved</h3>
+      <p>All your past checks are saved in your profile so you can revisit them anytime.</p>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTER -->
+<div id="page-register" class="page">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h2>Create Account</h2>
+      <p class="subtitle">Join WriteRight and start writing better today.</p>
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="reg-name" placeholder="e.g. Arjun Sharma">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="you@email.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="reg-pass" placeholder="Min. 6 characters">
+      </div>
+      <div class="form-group">
+        <label>AI Provider</label>
+        <select id="reg-provider">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI (ChatGPT)</option>
+          <option value="google">Google AI Studio (Gemini)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Model Name (Optional)</label>
+        <input type="text" id="reg-model" placeholder="Leave empty for default model">
+      </div>
+      <div class="form-group">
+        <label>Your AI API Key</label>
+        <input type="password" id="reg-api" placeholder="sk-... or AIza...">
+        <div class="api-hint">🔒 Stored locally in your browser only. Your key is only sent to the selected AI provider.</div>
+      </div>
+      <div class="error-msg" id="reg-error"></div>
+      <button class="auth-submit" onclick="register()">Create Account</button>
+      <div class="auth-switch">Already have an account? <a onclick="showPage('login')">Log In</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="page-login" class="page">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h2>Welcome Back</h2>
+      <p class="subtitle">Log in to continue improving your writing.</p>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@email.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-pass" placeholder="Your password">
+      </div>
+      <div class="error-msg" id="login-error"></div>
+      <button class="auth-submit" onclick="login()">Log In</button>
+      <div class="auth-switch">New here? <a onclick="showPage('register')">Create an account</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- PROFILE -->
+<div id="page-profile" class="page">
+  <div class="profile-wrap">
+    <div class="profile-header">
+      <div class="avatar" id="profile-avatar">A</div>
+      <div class="profile-info">
+        <h2 id="profile-name">User Name</h2>
+        <p id="profile-email">user@email.com</p>
+        <p id="profile-api-status" style="margin-top:6px; font-size:.82rem; color:var(--sage)">✅ API Key Connected</p>
+      </div>
+    </div>
+    <div class="profile-stats">
+      <div class="stat-card">
+        <div class="num" id="stat-checks">0</div>
+        <div class="lbl">Total Checks</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="stat-words">0</div>
+        <div class="lbl">Words Analysed</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="stat-days">0</div>
+        <div class="lbl">Days Active</div>
+      </div>
+    </div>
+    <div class="profile-actions">
+      <button class="btn-action btn-action-primary" onclick="showPage('checker')">✍️ Check My Writing</button>
+      <button class="btn-action btn-action-primary" style="background:var(--gold);color:var(--ink)" onclick="openApiModal()">🔑 Update API Key</button>
+      <button class="btn-action btn-action-danger" onclick="logout()">Log Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHECKER -->
+<div id="page-checker" class="page">
+  <div class="checker-wrap">
+    <h2>Writing Assistant</h2>
+    <p class="sub">Paste your text, choose a check type, and get AI feedback instantly.</p>
+
+    <div class="check-options">
+      <div class="chip active" data-mode="grammar" onclick="selectMode(this)">✅ Grammar Fix</div>
+      <div class="chip" data-mode="style" onclick="selectMode(this)">✨ Style Improve</div>
+      <div class="chip" data-mode="rephrase" onclick="selectMode(this)">🔄 Rephrase</div>
+      <div class="chip" data-mode="formal" onclick="selectMode(this)">🎩 Make Formal</div>
+      <div class="chip" data-mode="simple" onclick="selectMode(this)">🧒 Simplify</div>
+    </div>
+
+    <div class="checker-grid">
+      <div class="panel">
+        <div class="panel-label">
+          Your Text
+          <span class="char-count" id="char-count">0 chars</span>
+        </div>
+        <textarea id="input-text" placeholder="Paste or type your paragraph here…" oninput="updateCount()"></textarea>
+        <button class="btn-check" id="check-btn" onclick="checkText()">
+          <div class="spinner" id="spinner"></div>
+          <span id="btn-label">Analyse Text</span>
+        </button>
+      </div>
+      <div class="panel">
+        <div class="panel-label">
+          AI Suggestion
+          <button class="copy-btn" onclick="copyOutput()">Copy</button>
+        </div>
+        <div class="output-area" id="output-area">
+          <span class="output-placeholder">Your improved text will appear here…</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="history-section">
+      <h3>Recent History</h3>
+      <div class="history-list" id="history-list">
+        <div class="no-history">No checks yet. Paste some text to get started!</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- API KEY MODAL -->
+<div class="modal-overlay" id="api-modal">
+  <div class="modal">
+    <h3>Update AI Settings</h3>
+    <div class="form-group">
+      <label>AI Provider</label>
+      <select id="modal-provider">
+        <option value="anthropic">Anthropic (Claude)</option>
+        <option value="openai">OpenAI (ChatGPT)</option>
+        <option value="google">Google AI Studio (Gemini)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Model Name (Optional)</label>
+      <input type="text" id="modal-model" placeholder="Leave empty for default model">
+    </div>
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="password" id="modal-api" placeholder="sk-... or AIza...">
+      <div class="api-hint">🔒 Stored locally in your browser only.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="closeApiModal()">Cancel</button>
+      <button class="btn-modal-save" onclick="saveApiKey()">Save Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="JS/config.js"></script>
+<script src="JS/app.js"></script>
+</body>
+</html>
