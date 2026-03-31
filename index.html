@@ -76,23 +76,6 @@
         <label>Password</label>
         <input type="password" id="reg-pass" placeholder="Min. 6 characters">
       </div>
-      <div class="form-group">
-        <label>AI Provider</label>
-        <select id="reg-provider">
-          <option value="anthropic">Anthropic (Claude)</option>
-          <option value="openai">OpenAI (ChatGPT)</option>
-          <option value="google">Google AI Studio (Gemini)</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Model Name (Optional)</label>
-        <input type="text" id="reg-model" placeholder="Leave empty for default model">
-      </div>
-      <div class="form-group">
-        <label>Your AI API Key</label>
-        <input type="password" id="reg-api" placeholder="sk-... or AIza...">
-        <div class="api-hint">🔒 Stored locally in your browser only. Your key is only sent to the selected AI provider.</div>
-      </div>
       <div class="error-msg" id="reg-error"></div>
       <button class="auth-submit" onclick="register()">Create Account</button>
       <div class="auth-switch">Already have an account? <a onclick="showPage('login')">Log In</a></div>
@@ -149,8 +132,11 @@
     <div class="profile-actions">
       <button class="btn-action btn-action-primary" onclick="showPage('checker')">✍️ Check My Writing</button>
       <button class="btn-action btn-action-primary" style="background:var(--gold);color:var(--ink)" onclick="openApiModal()">🔑 Update API Key</button>
+      <button class="btn-action btn-action-primary" onclick="exportRecoveryBackup()">⬇️ Download Backup</button>
+      <button class="btn-action btn-action-primary" onclick="clickRestoreBackup()">⬆️ Restore Backup</button>
       <button class="btn-action btn-action-danger" onclick="logout()">Log Out</button>
     </div>
+    <input type="file" id="backup-file" accept="application/json" style="display:none" onchange="importRecoveryBackup(event)">
   </div>
 </div>
 
@@ -203,23 +189,11 @@
 <!-- API KEY MODAL -->
 <div class="modal-overlay" id="api-modal">
   <div class="modal">
-    <h3>Update AI Settings</h3>
-    <div class="form-group">
-      <label>AI Provider</label>
-      <select id="modal-provider">
-        <option value="anthropic">Anthropic (Claude)</option>
-        <option value="openai">OpenAI (ChatGPT)</option>
-        <option value="google">Google AI Studio (Gemini)</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Model Name (Optional)</label>
-      <input type="text" id="modal-model" placeholder="Leave empty for default model">
-    </div>
+    <h3>Update API Key</h3>
     <div class="form-group">
       <label>API Key</label>
       <input type="password" id="modal-api" placeholder="sk-... or AIza...">
-      <div class="api-hint">🔒 Stored locally in your browser only.</div>
+      <div class="api-hint">Provider is auto-detected from your key. Stored locally in your browser only.</div>
     </div>
     <div class="modal-footer">
       <button class="btn-modal-cancel" onclick="closeApiModal()">Cancel</button>

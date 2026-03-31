@@ -1,6 +1,9 @@
 // STATE
 let currentMode = 'grammar';
 let currentUser = null;
+const USERS_KEY = 'wr_users';
+const SESSION_KEY = 'wr_session';
+const BACKUP_VERSION = 1;
 
 const DEFAULT_MODELS = (window.WR_CONFIG && window.WR_CONFIG.models) || {
   anthropic: 'claude-sonnet-4-20250514',
@@ -10,9 +13,14 @@ const DEFAULT_MODELS = (window.WR_CONFIG && window.WR_CONFIG.models) || {
 
 // Load session
 window.onload = () => {
-  const saved = localStorage.getItem('wr_session');
-  if (saved) {
-    currentUser = normalizeUser(JSON.parse(saved));
+  const saved = getSession();
+  if (saved && saved.email) {
+    const users = getUsers();
+    if (!users[saved.email]) {
+      localStorage.removeItem(SESSION_KEY);
+      return;
+    }
+    currentUser = normalizeUser(users[saved.email]);
     setLoggedIn();
     showPage('profile');
   }
@@ -27,45 +35,76 @@ function showPage(id) {
 }
 
 // AUTH
-function register() {
+async function register() {
   const name = document.getElementById('reg-name').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   const pass = document.getElementById('reg-pass').value;
-  const provider = document.getElementById('reg-provider').value;
-  const model = document.getElementById('reg-model').value.trim() || DEFAULT_MODELS[provider];
-  const apiInput = document.getElementById('reg-api').value.trim();
-  const api = resolveProviderApiKey(provider, apiInput);
   const err = document.getElementById('reg-error');
 
   if (!name || !email || !pass) { showErr(err, 'Please fill all fields.'); return; }
-  if (!api) { showErr(err, 'Please add a valid API key for the selected provider.'); return; }
   if (pass.length < 6) { showErr(err, 'Password must be at least 6 characters.'); return; }
-  if (!validateApiKey(provider, api)) { showErr(err, 'Invalid API key format for selected provider.'); return; }
 
-  const users = JSON.parse(localStorage.getItem('wr_users') || '{}');
+  const users = getUsers();
   if (users[email]) { showErr(err, 'Email already registered. Please log in.'); return; }
 
-  users[email] = { name, email, pass, api, provider, model, joined: Date.now(), checks: 0, words: 0 };
-  localStorage.setItem('wr_users', JSON.stringify(users));
+  const salt = createSalt();
+  const passHash = await hashPassword(pass, salt);
+
+  users[email] = {
+    name,
+    email,
+    passHash,
+    passSalt: salt,
+    api: '',
+    provider: '',
+    model: '',
+    joined: Date.now(),
+    checks: 0,
+    words: 0
+  };
+  saveUsers(users);
 
   currentUser = normalizeUser(users[email]);
-  localStorage.setItem('wr_session', JSON.stringify(currentUser));
+  setSession({ email: currentUser.email, loginAt: Date.now() });
   setLoggedIn();
   showPage('profile');
+  openApiModal();
   showToast('Welcome to WriteRight, ' + name + '!');
 }
 
-function login() {
+async function login() {
   const email = document.getElementById('login-email').value.trim();
   const pass = document.getElementById('login-pass').value;
   const err = document.getElementById('login-error');
 
-  const users = JSON.parse(localStorage.getItem('wr_users') || '{}');
-  if (!users[email] || users[email].pass !== pass) {
+  const users = getUsers();
+  const user = users[email];
+  if (!user) {
     showErr(err, 'Invalid email or password.'); return;
   }
-  currentUser = normalizeUser(users[email]);
-  localStorage.setItem('wr_session', JSON.stringify(currentUser));
+
+  let validPassword = false;
+  if (user.passHash && user.passSalt) {
+    validPassword = await verifyPassword(pass, user.passSalt, user.passHash);
+  } else if (user.pass) {
+    validPassword = user.pass === pass;
+    if (validPassword) {
+      // Migrate old plain-text password storage to salted hash.
+      const newSalt = createSalt();
+      user.passSalt = newSalt;
+      user.passHash = await hashPassword(pass, newSalt);
+      delete user.pass;
+      users[email] = user;
+      saveUsers(users);
+    }
+  }
+
+  if (!validPassword) {
+    showErr(err, 'Invalid email or password.'); return;
+  }
+
+  currentUser = normalizeUser(user);
+  setSession({ email: currentUser.email, loginAt: Date.now() });
   setLoggedIn();
   showPage('profile');
   showToast('Welcome back, ' + currentUser.name + '!');
@@ -73,7 +112,7 @@ function login() {
 
 function logout() {
   currentUser = null;
-  localStorage.removeItem('wr_session');
+  localStorage.removeItem(SESSION_KEY);
   document.getElementById('nav-btns').style.display = 'flex';
   document.getElementById('nav-user').style.display = 'none';
   showPage('home');
@@ -88,10 +127,14 @@ function setLoggedIn() {
 // PROFILE
 function refreshProfile() {
   if (!currentUser) return;
+  const aiConfig = resolveAiConfig();
+  const statusText = aiConfig
+    ? 'Connected: ' + capitalize(aiConfig.provider) + ' • ' + aiConfig.model
+    : 'No API key connected yet';
   document.getElementById('profile-name').textContent = currentUser.name;
   document.getElementById('profile-email').textContent = currentUser.email;
   document.getElementById('profile-avatar').textContent = currentUser.name[0].toUpperCase();
-  document.getElementById('profile-api-status').textContent = 'Connected: ' + capitalize(currentUser.provider) + ' • ' + currentUser.model;
+  document.getElementById('profile-api-status').textContent = statusText;
   document.getElementById('stat-checks').textContent = currentUser.checks || 0;
   document.getElementById('stat-words').textContent = currentUser.words || 0;
   const days = Math.max(1, Math.floor((Date.now() - currentUser.joined) / 86400000));
@@ -100,9 +143,8 @@ function refreshProfile() {
 
 // API MODAL
 function openApiModal() {
-  document.getElementById('modal-provider').value = currentUser.provider || 'anthropic';
-  document.getElementById('modal-model').value = currentUser.model || DEFAULT_MODELS[currentUser.provider || 'anthropic'];
-  document.getElementById('modal-api').value = currentUser.api || '';
+  const aiConfig = resolveAiConfig();
+  document.getElementById('modal-api').value = currentUser.api || (aiConfig ? aiConfig.apiKey : '');
   document.getElementById('api-modal').classList.add('open');
 }
 
@@ -111,13 +153,17 @@ function closeApiModal() {
 }
 
 function saveApiKey() {
-  const provider = document.getElementById('modal-provider').value;
-  const model = document.getElementById('modal-model').value.trim() || DEFAULT_MODELS[provider];
-  const key = resolveProviderApiKey(provider, document.getElementById('modal-api').value.trim());
+  const key = document.getElementById('modal-api').value.trim();
+  const provider = detectProviderFromKey(key);
+
+  if (!key) {
+    showToast('Please enter your API key.');
+    return;
+  }
   if (!validateApiKey(provider, key)) { showToast('Invalid API key format for selected provider.'); return; }
 
   currentUser.provider = provider;
-  currentUser.model = model;
+  currentUser.model = DEFAULT_MODELS[provider];
   currentUser.api = key;
   saveUser();
   closeApiModal();
@@ -148,6 +194,13 @@ const PROMPTS = {
 async function checkText() {
   if (!currentUser) { showToast('Please log in first.'); showPage('login'); return; }
 
+  const aiConfig = resolveAiConfig();
+  if (!aiConfig) {
+    showToast('Please add your API key first.');
+    openApiModal();
+    return;
+  }
+
   const text = document.getElementById('input-text').value.trim();
   if (!text) { showToast('Please enter some text first.'); return; }
 
@@ -162,7 +215,7 @@ async function checkText() {
   output.innerHTML = '<span class="output-placeholder">AI is reading your text...</span>';
 
   try {
-    const result = await requestAiSuggestion(text);
+    const result = await requestAiSuggestion(text, aiConfig);
     output.textContent = result;
 
     currentUser.checks = (currentUser.checks || 0) + 1;
@@ -226,29 +279,28 @@ function loadHistory(time) {
   });
 }
 
-async function requestAiSuggestion(text) {
-  const provider = currentUser.provider || 'anthropic';
-  const model = currentUser.model || DEFAULT_MODELS[provider];
+async function requestAiSuggestion(text, aiConfig) {
+  const provider = aiConfig.provider;
+  const model = aiConfig.model;
   const prompt = PROMPTS[currentMode] + '\n\nOriginal Text:\n' + text;
 
   if (provider === 'google') {
-    return callGoogle(prompt, model);
+    return callGoogle(prompt, model, aiConfig.apiKey);
   }
   if (provider === 'openai') {
-    return callOpenAI(prompt, model);
+    return callOpenAI(prompt, model, aiConfig.apiKey);
   }
-  return callAnthropic(prompt, model);
+  return callAnthropic(prompt, model, aiConfig.apiKey);
 }
 
-async function callGoogle(prompt, model) {
+async function callGoogle(prompt, model, apiKey) {
   const timeoutMs = (window.WR_CONFIG && window.WR_CONFIG.api && window.WR_CONFIG.api.timeoutMs) || 30000;
-  const key = resolveProviderApiKey('google', currentUser.api || '');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key), {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(apiKey), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -278,7 +330,7 @@ async function callGoogle(prompt, model) {
   }
 }
 
-async function callAnthropic(prompt, model) {
+async function callAnthropic(prompt, model, apiKey) {
   const timeoutMs = (window.WR_CONFIG && window.WR_CONFIG.api && window.WR_CONFIG.api.timeoutMs) || 30000;
   const maxTokens = (window.WR_CONFIG && window.WR_CONFIG.api && window.WR_CONFIG.api.maxTokens) || 1500;
 
@@ -290,7 +342,7 @@ async function callAnthropic(prompt, model) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': currentUser.api,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
@@ -314,7 +366,7 @@ async function callAnthropic(prompt, model) {
   }
 }
 
-async function callOpenAI(prompt, model) {
+async function callOpenAI(prompt, model, apiKey) {
   const timeoutMs = (window.WR_CONFIG && window.WR_CONFIG.api && window.WR_CONFIG.api.timeoutMs) || 30000;
   const temperature = (window.WR_CONFIG && window.WR_CONFIG.api && window.WR_CONFIG.api.temperature) || 0.3;
 
@@ -326,7 +378,7 @@ async function callOpenAI(prompt, model) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + currentUser.api
+        'Authorization': 'Bearer ' + apiKey
       },
       body: JSON.stringify({
         model,
@@ -353,11 +405,11 @@ async function callOpenAI(prompt, model) {
 
 // UTILS
 function normalizeUser(user) {
-  const provider = user.provider || 'anthropic';
+  const provider = user.provider || '';
   return {
     ...user,
     provider,
-    model: user.model || DEFAULT_MODELS[provider]
+    model: user.model || (provider ? DEFAULT_MODELS[provider] : '')
   };
 }
 
@@ -369,11 +421,11 @@ function validateApiKey(provider, key) {
   return false;
 }
 
-function resolveProviderApiKey(provider, userInputKey) {
-  if (userInputKey) return userInputKey;
-  if (provider === 'google' && window.WR_CONFIG && window.WR_CONFIG.googleApiKey) {
-    return window.WR_CONFIG.googleApiKey;
-  }
+function detectProviderFromKey(key) {
+  if (!key) return '';
+  if (key.startsWith('sk-ant-')) return 'anthropic';
+  if (key.startsWith('sk-')) return 'openai';
+  if (key.startsWith('AIza')) return 'google';
   return '';
 }
 
@@ -382,10 +434,124 @@ function capitalize(str) {
 }
 
 function saveUser() {
-  localStorage.setItem('wr_session', JSON.stringify(currentUser));
-  const users = JSON.parse(localStorage.getItem('wr_users') || '{}');
+  const users = getUsers();
   users[currentUser.email] = currentUser;
-  localStorage.setItem('wr_users', JSON.stringify(users));
+  saveUsers(users);
+  setSession({ email: currentUser.email, loginAt: Date.now() });
+}
+
+function getUsers() {
+  return JSON.parse(localStorage.getItem(USERS_KEY) || '{}');
+}
+
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function getSession() {
+  return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+}
+
+function setSession(session) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function resolveAiConfig() {
+  const keyFromUser = currentUser && currentUser.api ? currentUser.api.trim() : '';
+  const keyFromConfig = window.WR_CONFIG && window.WR_CONFIG.googleApiKey ? window.WR_CONFIG.googleApiKey.trim() : '';
+  const apiKey = keyFromUser || keyFromConfig;
+  const provider = detectProviderFromKey(apiKey);
+
+  if (!apiKey || !provider) return null;
+
+  return {
+    apiKey,
+    provider,
+    model: DEFAULT_MODELS[provider]
+  };
+}
+
+function clickRestoreBackup() {
+  document.getElementById('backup-file').click();
+}
+
+function exportRecoveryBackup() {
+  if (!currentUser) return;
+
+  const users = getUsers();
+  const user = users[currentUser.email];
+  const history = JSON.parse(localStorage.getItem('wr_hist_' + currentUser.email) || '[]');
+
+  const payload = {
+    backupVersion: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    user,
+    history
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeEmail = currentUser.email.replace(/[^a-zA-Z0-9]/g, '_');
+  a.href = url;
+  a.download = 'writeright_backup_' + safeEmail + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Backup downloaded.');
+}
+
+function importRecoveryBackup(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function onLoad() {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || !data.user || !data.user.email) {
+        throw new Error('Invalid backup file.');
+      }
+
+      const users = getUsers();
+      users[data.user.email] = data.user;
+      saveUsers(users);
+
+      const history = Array.isArray(data.history) ? data.history : [];
+      localStorage.setItem('wr_hist_' + data.user.email, JSON.stringify(history));
+
+      currentUser = normalizeUser(data.user);
+      setSession({ email: currentUser.email, loginAt: Date.now() });
+      setLoggedIn();
+      showPage('profile');
+      showToast('Backup restored successfully.');
+    } catch (e) {
+      showToast('Could not restore backup.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  reader.readAsText(file);
+}
+
+function createSalt() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hashPassword(password, salt) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + ':' + salt);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function verifyPassword(password, salt, expectedHash) {
+  const actualHash = await hashPassword(password, salt);
+  return actualHash === expectedHash;
 }
 
 function showErr(el, msg) {
