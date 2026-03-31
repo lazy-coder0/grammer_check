@@ -131,7 +131,6 @@
     </div>
     <div class="profile-actions">
       <button class="btn-action btn-action-primary" onclick="showPage('checker')">✍️ Check My Writing</button>
-      <button class="btn-action btn-action-primary" style="background:var(--gold);color:var(--ink)" onclick="openApiModal()">🔑 Update API Key</button>
       <button class="btn-action btn-action-danger" onclick="logout()">Log Out</button>
     </div>
   </div>
@@ -179,22 +178,6 @@
       <div class="history-list" id="history-list">
         <div class="no-history">No checks yet. Paste some text to get started!</div>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- API KEY MODAL -->
-<div class="modal-overlay" id="api-modal">
-  <div class="modal">
-    <h3>Update API Key</h3>
-    <div class="form-group">
-      <label>API Key</label>
-      <input type="password" id="modal-api" placeholder="sk-... or AIza...">
-      <div class="api-hint">Provider is auto-detected from your key. Stored locally in your browser only.</div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-modal-cancel" onclick="closeApiModal()">Cancel</button>
-      <button class="btn-modal-save" onclick="saveApiKey()">Save Key</button>
     </div>
   </div>
 </div>

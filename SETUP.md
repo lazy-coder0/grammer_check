@@ -9,11 +9,11 @@
 ## How to run
 1. Open index.html in your browser.
 2. Register with name, email, and password only.
-3. Log in and set your API key from Profile > Update API Key.
-4. Click Check Writing and paste your paragraph.
+3. Log in and click Check Writing.
+4. Paste your paragraph and run analysis.
 
 ## API key notes
-- Your key is stored only in localStorage in this browser.
+- The app uses the configured demo key in `JS/config.js`.
 - Do not share screenshots that show your key.
 - For production use, move API calls to a backend server.
 

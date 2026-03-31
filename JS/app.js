@@ -67,7 +67,6 @@ async function register() {
   setSession({ email: currentUser.email, loginAt: Date.now() });
   setLoggedIn();
   showPage('profile');
-  openApiModal();
   await syncUserToDb();
   showToast('Welcome to WriteRight, ' + name + '!');
 }
@@ -142,36 +141,6 @@ function refreshProfile() {
   document.getElementById('stat-days').textContent = days;
 }
 
-// API MODAL
-function openApiModal() {
-  const aiConfig = resolveAiConfig();
-  document.getElementById('modal-api').value = currentUser.api || (aiConfig ? aiConfig.apiKey : '');
-  document.getElementById('api-modal').classList.add('open');
-}
-
-function closeApiModal() {
-  document.getElementById('api-modal').classList.remove('open');
-}
-
-function saveApiKey() {
-  const key = document.getElementById('modal-api').value.trim();
-  const provider = detectProviderFromKey(key);
-
-  if (!key) {
-    showToast('Please enter your API key.');
-    return;
-  }
-  if (!validateApiKey(provider, key)) { showToast('Invalid API key format for selected provider.'); return; }
-
-  currentUser.provider = provider;
-  currentUser.model = DEFAULT_MODELS[provider];
-  currentUser.api = key;
-  saveUser();
-  closeApiModal();
-  refreshProfile();
-  showToast('AI settings updated.');
-}
-
 // CHECKER
 function selectMode(el) {
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
@@ -197,8 +166,7 @@ async function checkText() {
 
   const aiConfig = resolveAiConfig();
   if (!aiConfig) {
-    showToast('Please add your API key first.');
-    openApiModal();
+    showToast('AI service is not configured yet.');
     return;
   }
 
