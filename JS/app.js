@@ -3,7 +3,6 @@ let currentMode = 'grammar';
 let currentUser = null;
 const USERS_KEY = 'wr_users';
 const SESSION_KEY = 'wr_session';
-const BACKUP_VERSION = 1;
 
 const DEFAULT_MODELS = (window.WR_CONFIG && window.WR_CONFIG.models) || {
   anthropic: 'claude-sonnet-4-20250514',
@@ -69,6 +68,7 @@ async function register() {
   setLoggedIn();
   showPage('profile');
   openApiModal();
+  await syncUserToDb();
   showToast('Welcome to WriteRight, ' + name + '!');
 }
 
@@ -106,6 +106,7 @@ async function login() {
   currentUser = normalizeUser(user);
   setSession({ email: currentUser.email, loginAt: Date.now() });
   setLoggedIn();
+  await syncUserFromDb();
   showPage('profile');
   showToast('Welcome back, ' + currentUser.name + '!');
 }
@@ -223,15 +224,17 @@ async function checkText() {
     saveUser();
 
     const hist = JSON.parse(localStorage.getItem('wr_hist_' + currentUser.email) || '[]');
-    hist.unshift({
+    const historyItem = {
       time: Date.now(),
       inputPreview: text.slice(0, 80),
       fullInput: text,
       output: result,
       mode: currentMode
-    });
+    };
+    hist.unshift(historyItem);
     if (hist.length > 20) hist.pop();
     localStorage.setItem('wr_hist_' + currentUser.email, JSON.stringify(hist));
+    await saveHistoryToDb(historyItem);
     refreshHistory();
 
     showToast('Done.');
@@ -277,6 +280,39 @@ function loadHistory(time) {
   document.querySelectorAll('.chip').forEach(c => {
     c.classList.toggle('active', c.dataset.mode === item.mode);
   });
+}
+
+async function syncUserToDb() {
+  if (!window.WR_DB || !window.WR_DB.enabled || !currentUser) return;
+
+  try {
+    await window.WR_DB.upsertUser(currentUser);
+  } catch (e) {
+    // Keep the app usable even when DB sync fails.
+  }
+}
+
+async function syncUserFromDb() {
+  if (!window.WR_DB || !window.WR_DB.enabled || !currentUser) return;
+
+  try {
+    const remoteHistory = await window.WR_DB.getHistory(currentUser.email);
+    if (Array.isArray(remoteHistory) && remoteHistory.length) {
+      localStorage.setItem('wr_hist_' + currentUser.email, JSON.stringify(remoteHistory));
+    }
+  } catch (e) {
+    // Keep the app usable even when DB read fails.
+  }
+}
+
+async function saveHistoryToDb(item) {
+  if (!window.WR_DB || !window.WR_DB.enabled || !currentUser || !item) return;
+
+  try {
+    await window.WR_DB.saveHistory(currentUser.email, item);
+  } catch (e) {
+    // Keep the app usable even when DB write fails.
+  }
 }
 
 async function requestAiSuggestion(text, aiConfig) {
@@ -438,6 +474,7 @@ function saveUser() {
   users[currentUser.email] = currentUser;
   saveUsers(users);
   setSession({ email: currentUser.email, loginAt: Date.now() });
+  syncUserToDb();
 }
 
 function getUsers() {
@@ -469,71 +506,6 @@ function resolveAiConfig() {
     provider,
     model: DEFAULT_MODELS[provider]
   };
-}
-
-function clickRestoreBackup() {
-  document.getElementById('backup-file').click();
-}
-
-function exportRecoveryBackup() {
-  if (!currentUser) return;
-
-  const users = getUsers();
-  const user = users[currentUser.email];
-  const history = JSON.parse(localStorage.getItem('wr_hist_' + currentUser.email) || '[]');
-
-  const payload = {
-    backupVersion: BACKUP_VERSION,
-    exportedAt: new Date().toISOString(),
-    user,
-    history
-  };
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const safeEmail = currentUser.email.replace(/[^a-zA-Z0-9]/g, '_');
-  a.href = url;
-  a.download = 'writeright_backup_' + safeEmail + '.json';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  showToast('Backup downloaded.');
-}
-
-function importRecoveryBackup(event) {
-  const file = event.target.files && event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = function onLoad() {
-    try {
-      const data = JSON.parse(reader.result);
-      if (!data || !data.user || !data.user.email) {
-        throw new Error('Invalid backup file.');
-      }
-
-      const users = getUsers();
-      users[data.user.email] = data.user;
-      saveUsers(users);
-
-      const history = Array.isArray(data.history) ? data.history : [];
-      localStorage.setItem('wr_hist_' + data.user.email, JSON.stringify(history));
-
-      currentUser = normalizeUser(data.user);
-      setSession({ email: currentUser.email, loginAt: Date.now() });
-      setLoggedIn();
-      showPage('profile');
-      showToast('Backup restored successfully.');
-    } catch (e) {
-      showToast('Could not restore backup.');
-    } finally {
-      event.target.value = '';
-    }
-  };
-
-  reader.readAsText(file);
 }
 
 function createSalt() {

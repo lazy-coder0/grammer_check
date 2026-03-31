@@ -132,11 +132,8 @@
     <div class="profile-actions">
       <button class="btn-action btn-action-primary" onclick="showPage('checker')">✍️ Check My Writing</button>
       <button class="btn-action btn-action-primary" style="background:var(--gold);color:var(--ink)" onclick="openApiModal()">🔑 Update API Key</button>
-      <button class="btn-action btn-action-primary" onclick="exportRecoveryBackup()">⬇️ Download Backup</button>
-      <button class="btn-action btn-action-primary" onclick="clickRestoreBackup()">⬆️ Restore Backup</button>
       <button class="btn-action btn-action-danger" onclick="logout()">Log Out</button>
     </div>
-    <input type="file" id="backup-file" accept="application/json" style="display:none" onchange="importRecoveryBackup(event)">
   </div>
 </div>
 
@@ -206,6 +203,8 @@
 <div class="toast" id="toast"></div>
 
 <script src="JS/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="JS/supabase-db.js"></script>
 <script src="JS/app.js"></script>
 </body>
 </html>

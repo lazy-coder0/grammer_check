@@ -27,5 +27,12 @@
 
 ## Account and history safety
 - Passwords are stored as salted SHA-256 hashes, not plain text.
-- Users can download a backup JSON from Profile and restore it later.
-- Backup includes account record and writing history for recovery.
+- Users keep access to their writing history after login.
+- History is saved locally and can sync to Supabase when configured.
+
+## Supabase database setup
+- Run `supabase_schema.sql` in your Supabase SQL editor.
+- Put your project URL and anon key in `JS/config.js`:
+	- `supabase.url`
+	- `supabase.anonKey`
+- Once set, user stats and history auto-sync to Supabase with localStorage fallback.
